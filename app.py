@@ -12,19 +12,21 @@ import streamlit as st
 
 
 def past_date(selected):
-    match selected:
-        case "1-Year":
-            return date.today() + relativedelta(years=-1)
-        case "2-Year":
-            return date.today() + relativedelta(years=-2)
-        case "3-Year":
-            return date.today() + relativedelta(years=-3)
-        case "5-Year":
-            return date.today() + relativedelta(years=-5)
-        case "10-Year":
-            return date.today() + relativedelta(years=-10)
-        case "20-Year":
-            return date.today() + relativedelta(years=-20)
+    switcher = {
+        "1-Year":
+            date.today() + relativedelta(years=-1),
+        "2-Year":
+            date.today() + relativedelta(years=-2),
+        "3-Year":
+            date.today() + relativedelta(years=-3),
+        "5-Year":
+            date.today() + relativedelta(years=-5),
+        "10-Year":
+            date.today() + relativedelta(years=-10),
+        "20-Year":
+            date.today() + relativedelta(years=-20),
+    }
+    return switcher.get(selected, date.today())
 st.title('Stock Trend Prediction')
 user_input = st.text_input('Enter Stock Ticker' , 'SBIN.NS')
 date_range = ["1-Year","2-Year","3-Year","5-Year","10-Year","20-Year"]
