@@ -11,6 +11,7 @@ from keras.models import load_model
 import streamlit as st
 
 
+date_range = ["1-Year","2-Year","3-Year","5-Year","10-Year","20-Year"]
 def past_date(date_range):
     match date_range:
         case "1-Year":
@@ -27,7 +28,6 @@ def past_date(date_range):
             return date.today() + relativedelta(years=-20)
 st.title('Stock Trend Prediction')
 user_input = st.text_input('Enter Stock Ticker' , 'SBIN.NS')
-date_range = ["1-Year","2-Year","3-Year","5-Year","10-Year","20-Year"]
 date_range = st.selectbox("Select Time Period", options= date_range)
 
 start = past_date(date_range)
