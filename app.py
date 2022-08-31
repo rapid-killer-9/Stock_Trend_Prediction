@@ -3,22 +3,39 @@ from json import load
 from pyexpat import model
 import numpy as np
 import pandas as pd
+from datetime import date
+from dateutil.relativedelta import relativedelta
 import matplotlib.pyplot as plt
 import pandas_datareader as data
 from keras.models import load_model
 import streamlit as st
 
-start = '2010-01-01'
-end = '2022-08-26'
 
-
+def past_date(date_range):
+    match date_range:
+        case "1-Year":
+            return date.today() + relativedelta(years=-1)
+        case "2-Year":
+            return date.today() + relativedelta(years=-2)
+        case "3-Year":
+            return date.today() + relativedelta(years=-3)
+        case "5-Year":
+            return date.today() + relativedelta(years=-5)
+        case "10-Year":
+            return date.today() + relativedelta(years=-10)
+        case "20-Year":
+            return date.today() + relativedelta(years=-20)
 st.title('Stock Trend Prediction')
-
 user_input = st.text_input('Enter Stock Ticker' , 'SBIN.NS')
+date_range = ["1-Year","2-Year","3-Year","5-Year","10-Year","20-Year"]
+date_range = st.selectbox("Select Time Period", options= date_range)
+
+start = past_date(date_range)
+end = date.today()
 df = data.DataReader(user_input,'yahoo',start ,end)
 
 #Describing Data
-st.subheader('Data From 2010-2022')
+st.write('Data Form ',start,'-',end)
 st.write(df.describe())
 
 #Data Visualizations
