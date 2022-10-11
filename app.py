@@ -12,7 +12,7 @@ from keras.models import load_model
 import streamlit as st
 
 
-# creating a switch for the sidebar to get the date range
+# creating a function to get starting date from the selected date range using selectbox
 def past_date(selected):
     switcher = {
         "1-Year":
@@ -31,7 +31,7 @@ def past_date(selected):
     return switcher.get(selected, date.today())
 
 
-# Using streamlit to deploy the app and creating a sidebar
+# Using streamlit to deploy the app and creating a selectbox
 st.title('Stock Trend Prediction')
 
 # Taking input for the stock ticker and the date range from the user  
