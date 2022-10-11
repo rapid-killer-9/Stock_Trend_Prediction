@@ -36,7 +36,7 @@ st.title('Stock Trend Prediction')
 
 # Taking input for the stock ticker and the date range from the user  
 user_input = st.text_input('Enter Stock Ticker' , 'SBIN.NS')
-date_range = ["10-Year","2-Year","3-Year","5-Year","1-Year","20-Year"]
+date_range = ["10-Year","1-Year","2-Year","3-Year","5-Year","20-Year"]
 date_range = st.selectbox("Select Time Period", options= date_range)
 selected = date_range
 start = past_date(selected)
