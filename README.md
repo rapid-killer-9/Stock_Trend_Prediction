@@ -6,9 +6,16 @@ This Project has been Deployed Using Streamlit  [Stock Trend Prediction](https:/
 For Stock Ticker Name You Can Use [Yahoo Finance](https://finance.yahoo.com/)
 1. Search For a Name In Yahoo Finance 
 2. Copy the Code Next to Stock Name in Yahoo finance within parenthesis \( \)
+   ![](/Images/yahoo.png)
 3. Paste that Stock Ticker in Stock Trend Prediction 
+   ![](/Images/input_stockticker.png)
 4. Select Date Range
+
+   ![](/Images/date_range.png)
 5. Enjoy the Prediction
+
+   ![](/Images/predicted.png)
+
 
 # Issue  
   Feel free to submit issues and enhancement requests.
