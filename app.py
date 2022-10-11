@@ -1,3 +1,4 @@
+# Importing necessary files
 from cProfile import label
 from json import load
 from pyexpat import model
@@ -11,6 +12,7 @@ from keras.models import load_model
 import streamlit as st
 
 
+# creating a switch for the sidebar to get the date range
 def past_date(selected):
     switcher = {
         "1-Year":
@@ -27,9 +29,14 @@ def past_date(selected):
             date.today() + relativedelta(years=-20),
     }
     return switcher.get(selected, date.today())
+
+
+# Using streamlit to deploy the app and creating a sidebar
 st.title('Stock Trend Prediction')
+
+# Taking input for the stock ticker and the date range from the user  
 user_input = st.text_input('Enter Stock Ticker' , 'SBIN.NS')
-date_range = ["1-Year","2-Year","3-Year","5-Year","10-Year","20-Year"]
+date_range = ["10-Year","2-Year","3-Year","5-Year","1-Year","20-Year"]
 date_range = st.selectbox("Select Time Period", options= date_range)
 selected = date_range
 start = past_date(selected)
@@ -74,10 +81,10 @@ scaler = MinMaxScaler(feature_range=(0,1))
 
 data_training_array = scaler.fit_transform(data_training)
 
-# Load My model
+# Loading our keras model and predicting the values
 model=load_model('Keras_Model.h5')
 
-# Testing Part
+# Testing the model for the starting 100 days from the selected range
 last_100_days = data_training.tail(100)
 final_Df = last_100_days.append(data_testing , ignore_index=True)
 input_data = scaler.fit_transform(final_Df)
