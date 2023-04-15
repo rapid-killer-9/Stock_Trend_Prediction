@@ -1,8 +1,8 @@
-# [Stock_Trend_Prediction](https://rapid-killer-9-stock-trend-prediction-app-w1mlw0.streamlitapp.com/)
+# [Stock_Trend_Prediction](https://rapid-killer-9-stock-trend-prediction-app-s070ni.streamlit.app/)
   This is a Project I have Made Using Python In this You Can Find the
   Various Graph plot for Selected Stock Ticker for a selected Date Range 
 # How to Use Project ?
-This Project has been Deployed Using Streamlit  [Stock Trend Prediction](https://rapid-killer-9-stock-trend-prediction-app-w1mlw0.streamlitapp.com/) <br />
+This Project has been Deployed Using Streamlit  [Stock Trend Prediction](https://rapid-killer-9-stock-trend-prediction-app-s070ni.streamlit.app/) <br />
 For Stock Ticker Name You Can Use [Yahoo Finance](https://finance.yahoo.com/)
 1. Search For a Name In Yahoo Finance 
 2. Copy the Code Next to Stock Name in Yahoo finance within parenthesis \( \)
