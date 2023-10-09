@@ -86,7 +86,7 @@ model=load_model('Keras_Model.h5')
 
 # Testing the model for the starting 100 days from the selected range
 last_100_days = data_training.tail(100)
-final_data = last_100_days.append(data_testing , ignore_index=True)
+final_data = pd.concat([last_100_days, data_testing], ignore_index=True)
 input_data = scaler.fit_transform(final_data)
 
 x_test = []
