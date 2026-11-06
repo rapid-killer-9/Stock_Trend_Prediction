@@ -7,4 +7,4 @@ scipy==1.9.1
 altair>=4.0,<5
 streamlit==1.22.0
 tensorflow==2.9.1
-yfinance==0.2.18
+yfinance>=0.2.40
