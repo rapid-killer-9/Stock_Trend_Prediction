@@ -102,6 +102,7 @@ cd Stock_Trend_Prediction
 **Step 2 — Build the Docker image**
 ```bash
 docker build -t stock-trend-prediction .
+#                                       ^ build context: current directory (required)
 ```
 
 **Step 3 — Run the container**
