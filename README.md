@@ -8,12 +8,13 @@ A Streamlit web app that visualises historical stock prices and overlays LSTM-ba
 
 | Layer | Technology |
 |---|---|
-| UI / server | [Streamlit](https://streamlit.io/) 1.12 |
+| UI / server | [Streamlit](https://streamlit.io/) 1.22 |
 | Data source | [yfinance](https://github.com/ranaroussi/yfinance) 0.2 |
 | ML model | TensorFlow / Keras 2.9 (pre-trained LSTM, `Keras_Model.h5`) |
 | Preprocessing | scikit-learn `MinMaxScaler` |
 | Charting | Matplotlib 3.5 |
-| Language | Python 3.9+ |
+| Language | Python 3.10 |
+| Containerisation | Docker (Python 3.10-slim, venv at `/opt/venv`) |
 | Dev container | GitHub Codespaces / VS Code Dev Containers |
 
 ---
@@ -38,6 +39,8 @@ Stock_Trend_Prediction/
 ├── train.py             # CLI training pipeline — build and save a new LSTM model
 ├── Keras_Model.h5       # Pre-trained LSTM weights loaded by app.py at runtime
 ├── requirements.txt     # Pinned Python dependencies
+├── Dockerfile           # Docker image — Python 3.10-slim with venv at /opt/venv
+├── .dockerignore        # Files excluded from the Docker build context
 ├── .env.example         # Environment variable template (no secrets required currently)
 ├── .devcontainer/
 │   └── devcontainer.json  # Codespaces / VS Code Dev Container config
@@ -84,18 +87,65 @@ Inverse-scale predictions → st.pyplot (Predicted vs Actual chart)
 
 ## Getting Started
 
-### Prerequisites
+### Option A — Docker (recommended)
 
-- Python 3.9 or later
-- `pip`
+Docker pins Python 3.10 and isolates all dependencies inside a venv at `/opt/venv`, so your host Python version and any future package updates can never break the app.
 
-### Install
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/)
+
+**Step 1 — Clone the repository**
+```bash
+git clone https://github.com/<your-username>/Stock_Trend_Prediction.git
+cd Stock_Trend_Prediction
+```
+
+**Step 2 — Build the Docker image**
+```bash
+docker build -t stock-trend-prediction .
+```
+
+**Step 3 — Run the container**
+```bash
+docker run -p 8501:8501 stock-trend-prediction
+```
+
+**Step 4 — Open the app**
+
+Visit [http://localhost:8501](http://localhost:8501) in your browser.
+
+To run in the background, add the `-d` flag:
+```bash
+docker run -d -p 8501:8501 --name stp stock-trend-prediction
+docker logs -f stp   # stream logs
+docker stop stp      # stop when done
+```
+
+#### Image layout
+
+| Path | Contents |
+|---|---|
+| `/usr/local/` | System Python 3.10 (untouched) |
+| `/opt/venv/` | App venv — all packages from `requirements.txt` |
+| `/app/` | `app.py`, `train.py`, `Keras_Model.h5` |
+
+---
+
+### Option B — Local venv
+
+**Prerequisites:** Python 3.10, `pip`
 
 ```bash
 git clone https://github.com/<your-username>/Stock_Trend_Prediction.git
 cd Stock_Trend_Prediction
+
+python3.10 -m venv venv
+source venv/bin/activate      # Windows: venv\Scripts\activate
+
 pip install -r requirements.txt
+streamlit run app.py
 ```
+
+> **Note:** Python 3.11+ is not supported — several pinned packages (NumPy 1.23, TensorFlow 2.9) do not ship wheels for newer interpreters and will fail to build from source.
 
 ### Environment variables
 
@@ -104,14 +154,6 @@ No API keys are required for basic usage. Copy the example file for future confi
 ```bash
 cp .env.example .env
 ```
-
-### Run
-
-```bash
-streamlit run app.py
-```
-
-The app opens at [http://localhost:8501](http://localhost:8501).
 
 ### GitHub Codespaces / Dev Container
 
