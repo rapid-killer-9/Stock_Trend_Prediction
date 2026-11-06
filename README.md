@@ -21,11 +21,12 @@ A Streamlit web app that visualises historical stock prices and overlays LSTM-ba
 ## Key Features
 
 - **LSTM price prediction** — loads a pre-trained Keras model and plots predicted vs. actual closing prices for the test split of the selected period.
+- **Retrainable model** — `train.py` CLI lets you retrain the LSTM on any ticker and period; the saved weights are a drop-in replacement for `Keras_Model.h5`.
+- **CSV export** — download the full OHLCV dataset or the aligned (Date, Actual, Predicted) prediction table directly from the UI.
 - **Interactive time range** — choose 1, 2, 3, 5, 10, or 20 years of history from a dropdown; data is fetched live from Yahoo Finance.
 - **Moving-average overlays** — 100-day MA and 200-day MA charts give a technical-analysis baseline alongside the raw closing price.
 - **Input validation & error recovery** — empty tickers are blocked before any network call; unrecognised tickers surface an actionable error with a link to Yahoo Finance.
 - **Request caching** — `@st.cache_data` on the data-fetch call and `@st.cache_resource` on model loading prevent redundant work across Streamlit reruns.
-- **One-click Codespaces** — the included Dev Container config installs dependencies and starts the server automatically.
 
 ---
 
@@ -33,8 +34,9 @@ A Streamlit web app that visualises historical stock prices and overlays LSTM-ba
 
 ```
 Stock_Trend_Prediction/
-├── app.py               # Single-file Streamlit app (UI + data + inference)
-├── Keras_Model.h5       # Pre-trained LSTM model weights (binary, tracked in git)
+├── app.py               # Streamlit app — UI, data fetch, inference, CSV export
+├── train.py             # CLI training pipeline — build and save a new LSTM model
+├── Keras_Model.h5       # Pre-trained LSTM weights loaded by app.py at runtime
 ├── requirements.txt     # Pinned Python dependencies
 ├── .env.example         # Environment variable template (no secrets required currently)
 ├── .devcontainer/
@@ -129,11 +131,43 @@ Open the repo in a Codespace or VS Code with the Dev Containers extension — th
 
 ---
 
+## Retraining the model
+
+`train.py` trains a new LSTM on any Yahoo Finance ticker and saves the weights to `Keras_Model.h5` (or a custom path), ready to be loaded by `app.py`.
+
+```bash
+# Retrain on Apple, 10 years of history, default 50 epochs
+python train.py --ticker AAPL
+
+# More control
+python train.py --ticker SBIN.NS --years 15 --epochs 100 --output my_model.h5
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--ticker` | *(required)* | Yahoo Finance symbol |
+| `--years` | `10` | Years of history to download |
+| `--epochs` | `50` | Max training epochs (EarlyStopping may stop sooner) |
+| `--batch-size` | `32` | Mini-batch size |
+| `--output` | `Keras_Model.h5` | Destination path for saved weights |
+
+**Model architecture** — 4-layer stacked LSTM (50 units) with 0.2 dropout after each LSTM layer, Dense(25), Dense(1). Input shape `(100, 1)` matches `LOOKBACK_WINDOW` in `app.py`.
+
+---
+
+## Exporting data
+
+Two download buttons appear in the app:
+
+- **Download raw data (CSV)** — full OHLCV DataFrame for the selected ticker and period.
+- **Download predictions (CSV)** — three-column file (`Date`, `Actual Price`, `Predicted Price`) for the test window.
+
+---
+
 ## Future Improvements
 
-- **Add a training pipeline** — expose a script to retrain `Keras_Model.h5` on a chosen ticker so the model generalises beyond the original training corpus. The current model was trained on specific data; its accuracy on arbitrary tickers is unknown. <!-- TODO: verify training data source -->
 - **Automated tests with `pytest`** — unit-test `prepare_sequences()` and `start_date_for_range()` in isolation; add a smoke test that mocks `yfinance.download` and asserts the prediction chart renders without error.
-- **Pagination / date-window export** — let users download the raw data and predictions as a CSV for further analysis in Excel or a notebook.
+- **Move `Keras_Model.h5` to Git LFS or a model registry** — binary ML weights bloat the repo history; a dedicated artifact store (e.g. DVC, Hugging Face Hub) is more appropriate for large model files.
 
 ---
 
