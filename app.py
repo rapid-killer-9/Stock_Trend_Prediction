@@ -1,7 +1,3 @@
-# Importing necessary files
-from cProfile import label
-from json import load
-from pyexpat import model
 import numpy as np
 import pandas as pd
 from datetime import date
@@ -9,109 +5,148 @@ from dateutil.relativedelta import relativedelta
 import matplotlib.pyplot as plt
 import yfinance as yf
 from keras.models import load_model
+from sklearn.preprocessing import MinMaxScaler
 import streamlit as st
 
+# ── Constants ────────────────────────────────────────────────────────────────
+MODEL_PATH = "Keras_Model.h5"
+TRAIN_SPLIT = 0.70
+LOOKBACK_WINDOW = 100
 
-# creating a function to get starting date from the selected date range using selectbox
-def past_date(selected):
-    switcher = {
-        "1-Year":
-            date.today() + relativedelta(years=-1),
-        "2-Year":
-            date.today() + relativedelta(years=-2),
-        "3-Year":
-            date.today() + relativedelta(years=-3),
-        "5-Year":
-            date.today() + relativedelta(years=-5),
-        "10-Year":
-            date.today() + relativedelta(years=-10),
-        "20-Year":
-            date.today() + relativedelta(years=-20),
-    }
-    return switcher.get(selected, date.today())
+DATE_RANGE_OPTIONS = ["10-Year", "1-Year", "2-Year", "3-Year", "5-Year", "20-Year"]
+
+_DELTA_MAP = {
+    "1-Year": relativedelta(years=-1),
+    "2-Year": relativedelta(years=-2),
+    "3-Year": relativedelta(years=-3),
+    "5-Year": relativedelta(years=-5),
+    "10-Year": relativedelta(years=-10),
+    "20-Year": relativedelta(years=-20),
+}
 
 
-# Using streamlit to deploy the app and creating a selectbox
-st.title('Stock Trend Prediction')
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def start_date_for_range(selected: str) -> date:
+    delta = _DELTA_MAP.get(selected)
+    if delta is None:
+        return date.today()
+    return date.today() + delta
 
-# Taking input for the stock ticker and the date range from the user  
-user_input = st.text_input('Enter Stock Ticker' , 'SBIN.NS')
-date_range = ["10-Year","1-Year","2-Year","3-Year","5-Year","20-Year"]
-date_range = st.selectbox("Select Time Period", options= date_range)
-selected = date_range
-start = past_date(selected)
+
+@st.cache_data(show_spinner=False)
+def fetch_stock_data(ticker: str, start: date, end: date) -> pd.DataFrame:
+    df = yf.download(ticker, start=start, end=end, progress=False)
+    return df
+
+
+@st.cache_resource(show_spinner=False)
+def load_keras_model():
+    return load_model(MODEL_PATH)
+
+
+def prepare_sequences(
+    close: pd.Series,
+) -> tuple[np.ndarray, np.ndarray, float]:
+    """Split close prices into scaled test sequences and return the scale factor."""
+    split_idx = int(len(close) * TRAIN_SPLIT)
+    training = pd.DataFrame(close[:split_idx])
+    testing = pd.DataFrame(close[split_idx:])
+
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaler.fit_transform(training)
+
+    seed_window = training.tail(LOOKBACK_WINDOW)
+    combined = pd.concat([seed_window, testing], ignore_index=True)
+    scaled = scaler.fit_transform(combined)
+
+    x_test, y_test = [], []
+    for i in range(LOOKBACK_WINDOW, scaled.shape[0]):
+        x_test.append(scaled[i - LOOKBACK_WINDOW : i])
+        y_test.append(scaled[i, 0])
+
+    scale_factor = 1.0 / scaler.scale_[0]
+    return np.array(x_test), np.array(y_test), scale_factor
+
+
+# ── UI ────────────────────────────────────────────────────────────────────────
+st.title("Stock Trend Prediction")
+
+ticker = st.text_input("Enter Stock Ticker", "SBIN.NS").strip().upper()
+selected_range = st.selectbox("Select Time Period", options=DATE_RANGE_OPTIONS)
+
+start = start_date_for_range(selected_range)
 end = date.today()
-data = yf.download(user_input, start=start, end=end)
 
-#Describing Data
-st.write('Data Form ',start,'-',end)
+if not ticker:
+    st.warning("Please enter a stock ticker to continue.")
+    st.stop()
+
+with st.spinner(f"Fetching data for {ticker}…"):
+    data = fetch_stock_data(ticker, start, end)
+
+if data.empty:
+    st.error(
+        f"No data found for ticker **{ticker}**. "
+        "Check the symbol on [Yahoo Finance](https://finance.yahoo.com/)."
+    )
+    st.stop()
+
+# ── Summary ───────────────────────────────────────────────────────────────────
+st.write(f"Data from **{start}** to **{end}**")
 st.write(data.describe())
 
-#Data Visualizations
-st.subheader('Closing Price vs Time-Chart')
-fig = plt.figure(figsize=(12,6))
-plt.plot(data.Close )
+# ── Moving-average charts ─────────────────────────────────────────────────────
+close = data["Close"].squeeze()
+
+st.subheader("Closing Price vs Time")
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.plot(close, label="Close")
+ax.legend()
 st.pyplot(fig)
+plt.close(fig)
 
-st.subheader('Closing Price vs Time-Chart with 100MA')
-ma100 = data.Close.rolling(100).mean()
-fig = plt.figure(figsize=(12,6))
-plt.plot(ma100,'r',label='MA100')
-plt.plot(data.Close,'b',label='Closing')
-plt.legend()
+st.subheader("Closing Price with 100-day MA")
+ma100 = close.rolling(LOOKBACK_WINDOW).mean()
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.plot(ma100, "r", label="100-day MA")
+ax.plot(close, "b", label="Close")
+ax.legend()
 st.pyplot(fig)
+plt.close(fig)
 
-st.subheader('Closing Price vs Time-Chart with 100MA & 200MA')
-ma100 = data.Close.rolling(100).mean()
-ma200 = data.Close.rolling(200).mean()
-fig = plt.figure(figsize=(12,6))
-plt.plot(ma100,'r',label='MA100')
-plt.plot(ma200,'g',label='MA200')
-plt.plot(data.Close,'b',label='Closing')
-plt.legend()
+st.subheader("Closing Price with 100-day & 200-day MA")
+ma200 = close.rolling(200).mean()
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.plot(ma100, "r", label="100-day MA")
+ax.plot(ma200, "g", label="200-day MA")
+ax.plot(close, "b", label="Close")
+ax.legend()
 st.pyplot(fig)
+plt.close(fig)
 
-#Splitting Data Into Training and Testing
+# ── Prediction ────────────────────────────────────────────────────────────────
+with st.spinner("Running prediction model…"):
+    model = load_keras_model()
+    x_test, y_test, scale_factor = prepare_sequences(close)
 
-data_training = pd.DataFrame(data['Close'][0:int(len(data)*0.70)])
-data_testing = pd.DataFrame(data['Close'][int(len(data)*0.70): int(len(data))])
+    if len(x_test) == 0:
+        st.warning(
+            "Not enough data to run predictions for the selected time period. "
+            "Try a longer range."
+        )
+        st.stop()
 
-from sklearn.preprocessing import MinMaxScaler
-scaler = MinMaxScaler(feature_range=(0,1))
+    y_predicted = model.predict(x_test, verbose=0)
 
-data_training_array = scaler.fit_transform(data_training)
-
-# Loading our keras model and predicting the values
-model=load_model('Keras_Model.h5')
-
-# Testing the model for the starting 100 days from the selected range
-last_100_days = data_training.tail(100)
-final_data = pd.concat([last_100_days, data_testing], ignore_index=True)
-input_data = scaler.fit_transform(final_data)
-
-x_test = []
-y_test = []
-
-for i in range(100, input_data.shape[0]):
-    x_test.append(input_data[i-100:i])
-    y_test.append(input_data[i,0])
-
-x_test , y_test =np.array(x_test) , np.array(y_test)
-
-y_predicted = model.predict(x_test)
-scaler = scaler.scale_
-
-scale_factor = 1/scaler[0]
 y_predicted = y_predicted * scale_factor
 y_test = y_test * scale_factor
 
-
-# Final Graph
-st.subheader('Prediction vs Original')
-fig2 = plt.figure(figsize=(12,6))
-plt.plot(y_test , 'b' , label = 'Original Price')
-plt.plot(y_predicted , 'r' , label = ' Predicted Price')
-plt.xlabel('Time')
-plt.ylabel('Price')
-plt.legend()
-st.pyplot(fig2)
+st.subheader("Predicted vs Actual Closing Price")
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.plot(y_test, "b", label="Actual Price")
+ax.plot(y_predicted, "r", label="Predicted Price")
+ax.set_xlabel("Time")
+ax.set_ylabel("Price")
+ax.legend()
+st.pyplot(fig)
+plt.close(fig)
