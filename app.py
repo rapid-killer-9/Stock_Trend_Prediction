@@ -94,6 +94,12 @@ if data.empty:
 # ── Summary ───────────────────────────────────────────────────────────────────
 st.write(f"Data from **{start}** to **{end}**")
 st.write(data.describe())
+st.download_button(
+    label="Download raw data (CSV)",
+    data=data.to_csv().encode("utf-8"),
+    file_name=f"{ticker}_{start}_{end}.csv",
+    mime="text/csv",
+)
 
 # ── Moving-average charts ─────────────────────────────────────────────────────
 close = data["Close"].squeeze()
@@ -141,6 +147,10 @@ with st.spinner("Running prediction model…"):
 y_predicted = y_predicted * scale_factor
 y_test = y_test * scale_factor
 
+# Align test-window dates with predicted values for the export
+split_idx = int(len(close) * TRAIN_SPLIT)
+test_dates = close.index[split_idx : split_idx + len(y_test)]
+
 st.subheader("Predicted vs Actual Closing Price")
 fig, ax = plt.subplots(figsize=(12, 6))
 ax.plot(y_test, "b", label="Actual Price")
@@ -150,3 +160,17 @@ ax.set_ylabel("Price")
 ax.legend()
 st.pyplot(fig)
 plt.close(fig)
+
+results_df = pd.DataFrame(
+    {
+        "Date": test_dates,
+        "Actual Price": y_test,
+        "Predicted Price": y_predicted.flatten(),
+    }
+)
+st.download_button(
+    label="Download predictions (CSV)",
+    data=results_df.to_csv(index=False).encode("utf-8"),
+    file_name=f"{ticker}_predictions_{start}_{end}.csv",
+    mime="text/csv",
+)
