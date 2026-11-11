@@ -1,71 +1,28 @@
-import numpy as np
-import pandas as pd
-from datetime import date
-from dateutil.relativedelta import relativedelta
 import matplotlib.pyplot as plt
+import pandas as pd
 import yfinance as yf
-from keras.models import load_model
-from sklearn.preprocessing import MinMaxScaler
+from datetime import date
+from tf_keras.models import load_model
 import streamlit as st
 
-# ── Constants ────────────────────────────────────────────────────────────────
-MODEL_PATH = "Keras_Model.h5"
-TRAIN_SPLIT = 0.70
-LOOKBACK_WINDOW = 100
-
-DATE_RANGE_OPTIONS = ["10-Year", "1-Year", "2-Year", "3-Year", "5-Year", "20-Year"]
-
-_DELTA_MAP = {
-    "1-Year": relativedelta(years=-1),
-    "2-Year": relativedelta(years=-2),
-    "3-Year": relativedelta(years=-3),
-    "5-Year": relativedelta(years=-5),
-    "10-Year": relativedelta(years=-10),
-    "20-Year": relativedelta(years=-20),
-}
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-def start_date_for_range(selected: str) -> date:
-    delta = _DELTA_MAP.get(selected)
-    if delta is None:
-        return date.today()
-    return date.today() + delta
+from core import (
+    DATE_RANGE_OPTIONS,
+    LOOKBACK_WINDOW,
+    MODEL_PATH,
+    TRAIN_SPLIT,
+    prepare_sequences,
+    start_date_for_range,
+)
 
 
 @st.cache_data(show_spinner=False)
 def fetch_stock_data(ticker: str, start: date, end: date) -> pd.DataFrame:
-    df = yf.download(ticker, start=start, end=end, progress=False)
-    return df
+    return yf.download(ticker, start=start, end=end, progress=False)
 
 
 @st.cache_resource(show_spinner=False)
 def load_keras_model():
     return load_model(MODEL_PATH)
-
-
-def prepare_sequences(
-    close: pd.Series,
-) -> tuple[np.ndarray, np.ndarray, float]:
-    """Split close prices into scaled test sequences and return the scale factor."""
-    split_idx = int(len(close) * TRAIN_SPLIT)
-    training = pd.DataFrame(close[:split_idx])
-    testing = pd.DataFrame(close[split_idx:])
-
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    scaler.fit_transform(training)
-
-    seed_window = training.tail(LOOKBACK_WINDOW)
-    combined = pd.concat([seed_window, testing], ignore_index=True)
-    scaled = scaler.fit_transform(combined)
-
-    x_test, y_test = [], []
-    for i in range(LOOKBACK_WINDOW, scaled.shape[0]):
-        x_test.append(scaled[i - LOOKBACK_WINDOW : i])
-        y_test.append(scaled[i, 0])
-
-    scale_factor = 1.0 / scaler.scale_[0]
-    return np.array(x_test), np.array(y_test), scale_factor
 
 
 # ── UI ────────────────────────────────────────────────────────────────────────
@@ -147,7 +104,6 @@ with st.spinner("Running prediction model…"):
 y_predicted = y_predicted * scale_factor
 y_test = y_test * scale_factor
 
-# Align test-window dates with predicted values for the export
 split_idx = int(len(close) * TRAIN_SPLIT)
 test_dates = close.index[split_idx : split_idx + len(y_test)]
 

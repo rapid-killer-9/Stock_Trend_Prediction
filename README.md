@@ -10,10 +10,10 @@ A Streamlit app that fetches live OHLCV data from Yahoo Finance and overlays LST
 |---|---|
 | UI / server | Streamlit 1.22 |
 | Data source | yfinance ≥ 0.2.40 (Yahoo Finance) |
-| ML framework | TensorFlow / Keras 2.9 |
+| ML framework | TensorFlow ≥ 2.16 + tf-keras (Keras 2 API) |
 | Preprocessing | scikit-learn `MinMaxScaler` |
 | Charting | Matplotlib 3.5 |
-| Language | Python 3.10 |
+| Language | Python 3.10 – 3.12 |
 | Container | Docker — `python:3.10-slim`, venv at `/opt/venv` |
 | Dev container | GitHub Codespaces / VS Code Dev Containers |
 
@@ -35,14 +35,20 @@ A Streamlit app that fetches live OHLCV data from Yahoo Finance and overlays LST
 ```
 Stock_Trend_Prediction/
 ├── app.py                  # Streamlit app: UI, data fetch, inference, charts, CSV export
+├── core.py                 # Pure business-logic (date helpers, sequence builder) — importable without Streamlit
 ├── train.py                # CLI: download data, train LSTM, save weights
 ├── Keras_Model.h5          # Pre-trained weights (loaded at inference time)
-├── requirements.txt        # Pinned Python dependencies
+├── requirements.txt        # Pinned runtime dependencies
+├── requirements-dev.txt    # Runtime deps + pytest for running tests
 ├── Dockerfile              # Docker image: python:3.10-slim + venv at /opt/venv
 ├── .dockerignore           # Excludes venv/, Images/, .git/ from build context
 ├── .env.example            # Env-var template (no secrets currently required)
 ├── .devcontainer/
 │   └── devcontainer.json   # Codespaces / VS Code Dev Container config
+├── tests/
+│   ├── conftest.py         # Shared fixtures (synthetic price series)
+│   ├── test_core.py        # Unit tests for core.py
+│   └── test_train.py       # Unit tests for train.py
 ├── Images/                 # Screenshots for documentation
 └── LICENSE                 # MIT
 ```
@@ -66,7 +72,8 @@ fetch_stock_data()            yf.download()  — @st.cache_data (keyed on ticker
         ▼
 prepare_sequences()
   ├── 70 / 30 split on close prices
-  ├── MinMaxScaler.fit_transform() on training slice only
+  ├── MinMaxScaler.fit() on training slice only  ← no data leakage
+  ├── MinMaxScaler.transform() on (seed_window + test)
   ├── prepend 100-day tail of training set to test set
   └── build sliding-window sequences of shape (100, 1)
         │
@@ -85,9 +92,10 @@ inverse-scale → Predicted vs Actual chart + CSV download
 ## Design Decisions
 
 - **Inference-only app** — `Keras_Model.h5` is trained offline via `train.py` and checked into the repo. `app.py` performs inference only, keeping the Streamlit deployment fast and stateless with no training dependency at runtime.
-- **Scaler fit on training slice only** — `MinMaxScaler` is fitted exclusively on the first 70 % of the requested history before being applied to the test window. Fitting on all data would leak future price information into the normalisation step.
+- **Scaler fit on training slice only** — `MinMaxScaler` is fitted exclusively on the first 70 % of the requested history before being applied to the test window via `.transform()`. Re-fitting on the full dataset would leak future price information into the normalisation step.
 - **100-day seed window injected into test set** — the tail of the training slice is prepended to the test data so the model always has a full 100-day lookback context for its first prediction, matching the `LOOKBACK_WINDOW` used during training.
 - **`@st.cache_resource` for the Keras model** — Keras objects are not reliably serialisable across all versions, so `cache_resource` (stores the live Python object) is used instead of `cache_data` (which requires serialisation).
+- **Pure logic in `core.py`** — `start_date_for_range` and `prepare_sequences` live in `core.py`, which has no Streamlit import. This lets the test suite import and exercise them directly without triggering UI-layer code.
 
 ---
 
@@ -118,7 +126,8 @@ No database is used. All data is fetched at runtime from Yahoo Finance.
 |---|---|---|
 | Raw download | `(n_days, 6)` | OHLCV + Adj Close from yfinance |
 | Close series | `(n_days,)` | `data["Close"].squeeze()` |
-| Training slice | `(n_days × 0.70, 1)` | MinMaxScaler fitted here |
+| Training slice | `(n_days × 0.70, 1)` | MinMaxScaler **fitted** here |
+| Seed window | `(100, 1)` | Last 100 rows of training, prepended to test |
 | x_train / x_test sequences | `(n_sequences, 100, 1)` | 100-day sliding window |
 | Model output | `(n_sequences, 1)` | Scaled predictions, then inverse-scaled |
 
@@ -151,7 +160,6 @@ cd Stock_Trend_Prediction
 **Step 2 — Build the Docker image**
 ```bash
 docker build -t stock-trend-prediction .
-#                                       ^ build context: current directory (required)
 ```
 
 **Step 3 — Run the container**
@@ -176,22 +184,22 @@ docker stop stp       # stop when done
 |---|---|
 | `/usr/local/` | System Python 3.10 (untouched) |
 | `/opt/venv/` | App venv — all packages from `requirements.txt` |
-| `/app/` | `app.py`, `train.py`, `Keras_Model.h5` |
+| `/app/` | `app.py`, `core.py`, `train.py`, `Keras_Model.h5` |
 
 ---
 
 ### Option B — Local venv
 
-**Prerequisites:** Python 3.10 exactly (`python3.10 --version`)
+**Prerequisites:** Python 3.10, 3.11, or 3.12 (`python3 --version`)
 
-> **Note:** Python 3.11+ is not supported — `numpy==1.23.2` and `tensorflow==2.9.1` have no pre-built wheels for newer interpreters and will fail to build from source.
+> **Note:** Python 3.13+ is not yet supported — TensorFlow 2.16/2.17 wheels are only published for Python 3.9–3.12. Use the Docker option (Option A) if your system Python is newer.
 
 ```bash
 git clone https://github.com/<your-username>/Stock_Trend_Prediction.git
 cd Stock_Trend_Prediction
 
-python3.10 -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
+python3.12 -m venv venv         # any of 3.10 / 3.11 / 3.12 works
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
 pip install -r requirements.txt
 streamlit run app.py
@@ -226,19 +234,52 @@ The script downloads history, trains with early stopping, and saves the best che
 
 ## Testing
 
-No automated tests exist. Manual smoke-test steps:
+The test suite uses **pytest** and stdlib `unittest.mock` — no extra mocking libraries required.
 
-1. Enter a valid ticker (`AAPL`, `SBIN.NS`) and verify all three MA charts and the prediction chart render.
-2. Enter an invalid ticker (`INVALID`) and verify the error message appears with a Yahoo Finance link.
-3. Select a short range (1-Year) for a recently listed stock and verify the "not enough data" warning fires.
+### Install test dependencies
+
+```bash
+# Inside your activated venv:
+pip install -r requirements-dev.txt
+```
+
+### Run all tests
+
+```bash
+pytest tests/ -v
+```
+
+### Run a specific module
+
+```bash
+pytest tests/test_core.py -v
+pytest tests/test_train.py -v
+```
+
+### Test coverage summary
+
+| File | What is tested |
+|---|---|
+| `tests/test_core.py` | `start_date_for_range` — all 6 valid labels, unknown label, empty string, case sensitivity, return type |
+| `tests/test_core.py` | `prepare_sequences` — output shapes, minimum viable input, empty-array return for short series, scale factor correctness, no-leakage assertion, scaled values in \[0, 1\], determinism, monotonic/constant-price edge cases |
+| `tests/test_train.py` | `build_sequences` — shapes, contiguity, correct y positions, custom window sizes, exact-boundary and under-boundary edge cases |
+| `tests/test_train.py` | `build_model` — layer count, input/output shapes, compiled optimizer, Adam/MSE config, end-to-end predict shape |
+| `tests/test_train.py` | `download_and_split` — happy-path shapes and dtype, `sys.exit(1)` on empty DataFrame, `sys.exit(1)` on training-slice-too-small, ticker forwarded to yfinance |
+
+### Manual smoke tests
+
+1. Enter a valid ticker (`AAPL`, `SBIN.NS`) — all three MA charts and the prediction chart render correctly.
+2. Enter an invalid ticker (`INVALID`) — error message appears with a Yahoo Finance link.
+3. Select a short range (1-Year) for a recently listed stock — "not enough data" warning fires.
 
 ---
 
 ## Future Improvements
 
-- **Add a pytest suite** — unit-test `prepare_sequences()` (fewer than 100 rows, single-day input) and `start_date_for_range()` with a mocked `date.today()`; smoke-test the prediction path with a mocked `yf.download`.
 - **Move `Keras_Model.h5` out of git** — binary weights bloat repo history; store in Git LFS, DVC, or Hugging Face Hub and fetch at container build time.
 - **Fix the shifting train/test boundary** — the 70/30 split is recalculated from the selected date range at inference time, so the test window shown in the UI may not correspond to the data the shipped model was actually trained on; make the split date a fixed parameter.
+- **Add coverage reporting** — integrate `pytest-cov` and enforce a minimum threshold in CI.
+- **Integration test with a real ticker** — a nightly CI job that calls `yf.download("AAPL")` and runs the full `prepare_sequences` → predict pipeline catches upstream yfinance API changes early.
 
 ---
 

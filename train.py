@@ -29,9 +29,9 @@ import pandas as pd
 import yfinance as yf
 from dateutil.relativedelta import relativedelta
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.layers import Dense, Dropout, LSTM
-from tensorflow.keras.models import Sequential
+from tf_keras.callbacks import EarlyStopping, ModelCheckpoint
+from tf_keras.layers import Dense, Dropout, LSTM
+from tf_keras.models import Sequential
 
 # Mirror the constants used in app.py so inference is consistent.
 LOOKBACK_WINDOW = 100
